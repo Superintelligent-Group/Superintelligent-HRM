@@ -15,6 +15,7 @@ TORCH_VERSION="2.6.0"
 CUDA_SUFFIX="cu124" # Corresponds to your system's CUDA 12.4
 XFORMERS_VERSION="0.0.29.post2"
 NUMPY_VERSION="1.26.4"
+DATASETS_VERSION="2.19.0"
 PYTORCH_INDEX_URL="https://download.pytorch.org/whl/${CUDA_SUFFIX}"
 
 echo "--- Building the High-Performance HRM Language Environment for WSL2 ---"
