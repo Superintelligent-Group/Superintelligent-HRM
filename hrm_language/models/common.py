@@ -37,7 +37,6 @@ def trunc_normal_init_(tensor: torch.Tensor, std: float = 1.0, lower: float = -2
 
     return tensor
 
-
 class Attention(nn.Module):
     def __init__(
             self,
@@ -62,27 +61,62 @@ class Attention(nn.Module):
         k = k.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
         
-        if XFORMERS_AVAILABLE:
-            attn_bias = xops.fmha.attn_bias.LowerTriangularMask() if causal else None
-            out = xops.memory_efficient_attention(
-                q, k, v, 
-                p=self.dropout if self.training else 0.0,
-                attn_bias=attn_bias,
-            )
-        else:
-            att = (q @ k.transpose(-2, -1)) * (1.0 / self.head_dim**0.5)
-            if causal:
-                mask = torch.tril(torch.ones(T, T, device=x.device)).view(1, 1, T, T)
-                att = att.masked_fill(mask == 0, float("-inf"))
-            
-            att = F.softmax(att, dim=-1)
-            if self.training:
-                att = F.dropout(att, p=self.dropout)
-            
-            out = att @ v
+        # Use PyTorch's built-in, optimized attention
+        # This will automatically use flash attention or memory-efficient attention if available
+        out = F.scaled_dot_product_attention(
+            q, k, v, 
+            is_causal=causal, 
+            dropout_p=self.dropout if self.training else 0.0
+        )
         
         out = out.transpose(1, 2).reshape(B, T, C)
         return self.out_proj(out)
+
+# class Attention(nn.Module):
+#     def __init__(
+#             self,
+#             hidden_size: int,
+#             num_heads: int,
+#             head_dim: int,
+#             dropout: float = 0.0,
+#         ) -> None:
+#         super().__init__()
+#         self.num_heads = num_heads
+#         self.head_dim = head_dim
+#         self.dropout = dropout
+
+#         self.qkv_proj = nn.Linear(hidden_size, 3 * num_heads * head_dim, bias=False)
+#         self.out_proj = nn.Linear(num_heads * head_dim, hidden_size, bias=False)
+        
+#     def forward(self, x: torch.Tensor, causal: bool = False) -> torch.Tensor:
+#         B, T, C = x.shape
+#         q, k, v = self.qkv_proj(x).split(self.num_heads * self.head_dim, dim=-1)
+
+#         q = q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+#         k = k.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+#         v = v.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        
+#         if XFORMERS_AVAILABLE:
+#             attn_bias = xops.fmha.attn_bias.LowerTriangularMask() if causal else None
+#             out = xops.memory_efficient_attention(
+#                 q, k, v, 
+#                 p=self.dropout if self.training else 0.0,
+#                 attn_bias=attn_bias,
+#             )
+#         else:
+#             att = (q @ k.transpose(-2, -1)) * (1.0 / self.head_dim**0.5)
+#             if causal:
+#                 mask = torch.tril(torch.ones(T, T, device=x.device)).view(1, 1, T, T)
+#                 att = att.masked_fill(mask == 0, float("-inf"))
+            
+#             att = F.softmax(att, dim=-1)
+#             if self.training:
+#                 att = F.dropout(att, p=self.dropout)
+            
+#             out = att @ v
+        
+#         out = out.transpose(1, 2).reshape(B, T, C)
+#         return self.out_proj(out)
         
 
 class CausalAttention(Attention):
